@@ -1,16 +1,30 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "Popur Homebridge Plugin",
   "pluginType": "platform",
   "singular": true,
-  "strictValidation": false,
+  "strictValidation": true,
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Name",
+      "username": {
+        "title": "Popur Username",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "description": "Used to sign in to the Popur app"
+      },
+      "password": {
+        "title": "Popur Password",
+        "type": "string",
+        "required": true,
+        "description": "Used to sign in to the Popur app"
+      },
+      "maxCycles": {
+        "title": "Max Cycles (must be a multiple of 5)",
+        "type": "integer",
+        "required": true,
+        "minimum": 5,
+        "description": "Maximum number of cycles allowed before the litter box has to be cleaned. This will be used to calculate the 'air quality' or in other words, the fullness of the trash box.",
+        "default": 50
       }
     }
   }
