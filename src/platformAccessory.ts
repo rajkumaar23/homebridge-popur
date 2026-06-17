@@ -1,107 +1,99 @@
 import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
-import { PopurX5Platform } from './platform';
+import { PopurPlatform } from './platform';
 import { PopurDevice, PopurStatus } from './popurApi';
+import { PopurDevicePoller } from './devicePoller';
+
+/** The distinct HomeKit tiles a Popur device is split into. */
+export type PopurFeature = 'clean' | 'night' | 'bin' | 'cycles';
 
 /**
- * One accessory per Popur X5. HomeKit has no native litter-box type, so the device
- * is modeled as:
- *   - Switch "Clean Cycle"  (momentary; triggers a clean, then auto-resets)
- *   - Switch "Night Mode"   (stateful; toggles manual/do-not-disturb mode)
- *   - FilterMaintenance     ("Change Filter" when the waste bin is full)
- * Online/offline is reflected via StatusActive + StatusFault on those services.
+ * A single HomeKit accessory (one tile) for one feature of a Popur device.
+ *
+ * HomeKit has no native litter-box type, so each device is exposed as several
+ * standalone accessories so they appear as separate tiles in the Home app:
+ *   - clean  : Switch (momentary)  -> triggers a clean cycle, then auto-resets
+ *   - night  : Switch (stateful)   -> toggles manual / do-not-disturb mode
+ *   - bin    : OccupancySensor     -> "Detected" when the waste bin is full
+ *   - cycles : LightSensor         -> today's cycle count surfaced as lux (read-only)
+ * Online/offline is reflected via StatusActive + StatusFault on the sensor tiles.
+ *
+ * Note: the waste bin uses an OccupancySensor rather than FilterMaintenance because
+ * Apple's Home app does not render a standalone FilterMaintenance service.
  */
-export class PopurX5Accessory {
-  private readonly cleanService: Service;
-  private readonly nightService: Service;
-  private readonly binService: Service;
-  private readonly cyclesService: Service;
-
-  private status: PopurStatus = {
-    binFull: false,
-    cycles: 0,
-    totalCycles: 0,
-    manualMode: false,
-    online: false,
-  };
-
-  private pollTimer?: NodeJS.Timeout;
+export class PopurAccessory {
+  private readonly service: Service;
 
   constructor(
-    private readonly platform: PopurX5Platform,
+    private readonly platform: PopurPlatform,
     private readonly accessory: PlatformAccessory,
     private readonly device: PopurDevice,
+    private readonly poller: PopurDevicePoller,
+    private readonly feature: PopurFeature,
   ) {
     const { Service, Characteristic } = this.platform;
+    const name = this.accessory.displayName;
 
     this.accessory.getService(Service.AccessoryInformation)!
       .setCharacteristic(Characteristic.Manufacturer, 'Popur')
-      .setCharacteristic(Characteristic.Model, 'X5')
-      .setCharacteristic(Characteristic.SerialNumber, device.id);
+      .setCharacteristic(Characteristic.Model, device.model || 'Popur')
+      .setCharacteristic(Characteristic.SerialNumber, `${device.id}-${feature}`);
 
-    // --- Clean cycle (momentary switch) ---
-    this.cleanService =
-      this.accessory.getServiceById(Service.Switch, 'clean') ||
-      this.accessory.addService(Service.Switch, `${device.name} Clean`, 'clean');
-    this.cleanService.setCharacteristic(Characteristic.Name, `${device.name} Clean`);
-    this.cleanService.getCharacteristic(Characteristic.On)
-      .onGet(() => false) // momentary: always reads off
-      .onSet(this.handleCleanSet.bind(this));
+    // Each accessory carries exactly one primary service (so each shows as its own tile).
+    switch (feature) {
+      case 'clean':
+        this.service = this.accessory.getService(Service.Switch)
+          || this.accessory.addService(Service.Switch, name);
+        this.service.getCharacteristic(Characteristic.On)
+          .onGet(() => false) // momentary: always reads off
+          .onSet(this.handleCleanSet.bind(this));
+        break;
 
-    // --- Night / manual mode (stateful switch) ---
-    this.nightService =
-      this.accessory.getServiceById(Service.Switch, 'night') ||
-      this.accessory.addService(Service.Switch, `${device.name} Night Mode`, 'night');
-    this.nightService.setCharacteristic(Characteristic.Name, `${device.name} Night Mode`);
-    this.nightService.getCharacteristic(Characteristic.On)
-      .onGet(() => this.status.manualMode)
-      .onSet(this.handleNightSet.bind(this));
+      case 'night':
+        this.service = this.accessory.getService(Service.Switch)
+          || this.accessory.addService(Service.Switch, name);
+        this.service.getCharacteristic(Characteristic.On)
+          .onGet(() => this.poller.current.manualMode)
+          .onSet(this.handleNightSet.bind(this));
+        break;
 
-    // --- Bin full (filter maintenance) ---
-    this.binService =
-      this.accessory.getService(Service.FilterMaintenance) ||
-      this.accessory.addService(Service.FilterMaintenance, `${device.name} Waste Bin`);
-    this.binService.setCharacteristic(Characteristic.Name, `${device.name} Waste Bin`);
-    this.binService.getCharacteristic(Characteristic.FilterChangeIndication)
-      .onGet(() => this.binIndication());
+      case 'bin':
+        this.service = this.accessory.getService(Service.OccupancySensor)
+          || this.accessory.addService(Service.OccupancySensor, name);
+        this.service.getCharacteristic(Characteristic.OccupancyDetected)
+          .onGet(() => this.binOccupancy(this.poller.current));
+        break;
 
-    // --- Cycles today (light sensor "lux hack") ---
-    // HomeKit has no numeric-display service, so the daily cycle count is surfaced as
-    // an ambient-light-level reading: 3 cycles today -> "3 lux". Pure read-only display.
-    this.cyclesService =
-      this.accessory.getService(Service.LightSensor) ||
-      this.accessory.addService(Service.LightSensor, `${device.name} Cycles Today`);
-    this.cyclesService.setCharacteristic(Characteristic.Name, `${device.name} Cycles Today`);
-    this.cyclesService.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
-      .onGet(() => this.cyclesLux());
+      case 'cycles':
+      default:
+        this.service = this.accessory.getService(Service.LightSensor)
+          || this.accessory.addService(Service.LightSensor, name);
+        this.service.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
+          .onGet(() => this.cyclesLux(this.poller.current));
+        break;
+    }
 
-    // Initial fetch + polling loop.
-    this.refresh();
-    this.pollTimer = setInterval(() => this.refresh(), this.platform.pollInterval);
-    this.platform.api.on('shutdown', () => {
-      if (this.pollTimer) {
-        clearInterval(this.pollTimer);
-      }
-    });
+    this.service.setCharacteristic(Characteristic.Name, name);
+    this.poller.onUpdate((status) => this.update(status));
   }
 
-  private binIndication(): CharacteristicValue {
+  private binOccupancy(status: PopurStatus): CharacteristicValue {
     const { Characteristic } = this.platform;
-    return this.status.binFull
-      ? Characteristic.FilterChangeIndication.CHANGE_FILTER
-      : Characteristic.FilterChangeIndication.FILTER_OK;
+    return status.binFull
+      ? Characteristic.OccupancyDetected.OCCUPANCY_DETECTED
+      : Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED;
   }
 
   /** Map today's cycle count to lux. CurrentAmbientLightLevel must be >= 0.0001. */
-  private cyclesLux(): CharacteristicValue {
-    return Math.max(0.0001, this.status.cycles);
+  private cyclesLux(status: PopurStatus): CharacteristicValue {
+    return Math.max(0.0001, status.cycles);
   }
 
   private async handleCleanSet(value: CharacteristicValue) {
     if (!value) {
       return;
     }
-    this.platform.log.info(`Popur ${this.device.name}: starting clean cycle`);
+    this.platform.log.info(`${this.device.name}: starting clean cycle`);
     try {
       await this.platform.popur!.triggerClean(this.device.id);
     } catch (err) {
@@ -109,56 +101,53 @@ export class PopurX5Accessory {
     }
     // Reset the momentary switch back to off shortly after.
     setTimeout(() => {
-      this.cleanService.updateCharacteristic(this.platform.Characteristic.On, false);
+      this.service.updateCharacteristic(this.platform.Characteristic.On, false);
     }, 1000);
   }
 
   private async handleNightSet(value: CharacteristicValue) {
     const on = value as boolean;
-    this.platform.log.info(`Popur ${this.device.name}: night mode -> ${on ? 'on' : 'off'}`);
+    this.platform.log.info(`${this.device.name}: night mode -> ${on ? 'on' : 'off'}`);
     try {
       await this.platform.popur!.setManualMode(this.device.id, on);
-      this.status.manualMode = on;
     } catch (err) {
       this.platform.log.error(`Night mode command failed: ${(err as Error).message}`);
     }
   }
 
-  private async refresh() {
-    const status = await this.platform.popur!.getStatus(this.device.id);
-    if (!status) {
-      this.setReachability(false);
-      return;
+  /** Push the latest status to this accessory's characteristic + reachability. */
+  private update(status: PopurStatus) {
+    const { Characteristic } = this.platform;
+
+    switch (this.feature) {
+      case 'night':
+        this.service.updateCharacteristic(Characteristic.On, status.manualMode);
+        break;
+      case 'bin':
+        this.service.updateCharacteristic(
+          Characteristic.OccupancyDetected,
+          this.binOccupancy(status),
+        );
+        break;
+      case 'cycles':
+        this.service.updateCharacteristic(
+          Characteristic.CurrentAmbientLightLevel,
+          this.cyclesLux(status),
+        );
+        break;
+      // 'clean' is momentary and has no state to reflect.
     }
-    this.status = status;
-    const { Characteristic } = this.platform;
 
-    this.nightService.updateCharacteristic(Characteristic.On, status.manualMode);
-    this.binService.updateCharacteristic(
-      Characteristic.FilterChangeIndication,
-      this.binIndication(),
-    );
-    this.cyclesService.updateCharacteristic(
-      Characteristic.CurrentAmbientLightLevel,
-      this.cyclesLux(),
-    );
-    this.setReachability(status.online);
-
-    this.platform.log.debug(
-      `Popur ${this.device.name}: online=${status.online} binFull=${status.binFull} ` +
-      `manualMode=${status.manualMode} cycles=${status.cycles} total=${status.totalCycles}`,
-    );
-  }
-
-  /** Reflect online/offline on every service via StatusActive + StatusFault. */
-  private setReachability(online: boolean) {
-    const { Characteristic } = this.platform;
-    const fault = online
-      ? Characteristic.StatusFault.NO_FAULT
-      : Characteristic.StatusFault.GENERAL_FAULT;
-    for (const svc of [this.cleanService, this.nightService, this.binService, this.cyclesService]) {
-      svc.updateCharacteristic(Characteristic.StatusActive, online);
-      svc.updateCharacteristic(Characteristic.StatusFault, fault);
+    // StatusActive/StatusFault are only valid on the sensor services; the Switch
+    // service doesn't support them (setting them there would log warnings).
+    if (this.feature === 'bin' || this.feature === 'cycles') {
+      this.service.updateCharacteristic(Characteristic.StatusActive, status.online);
+      this.service.updateCharacteristic(
+        Characteristic.StatusFault,
+        status.online
+          ? Characteristic.StatusFault.NO_FAULT
+          : Characteristic.StatusFault.GENERAL_FAULT,
+      );
     }
   }
 }

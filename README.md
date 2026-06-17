@@ -1,9 +1,10 @@
 # homebridge-popur
 
-A [Homebridge](https://homebridge.io) plugin that brings the **Popur X5** self-cleaning
-cat litter box into Apple HomeKit.
+A [Homebridge](https://homebridge.io) plugin that brings **Popur** self-cleaning cat litter
+boxes into Apple HomeKit. Developed and tested against the **Popur X5**, but every device on
+your Popur account is discovered automatically, so other models should work too.
 
-> ⚠️ **Unofficial & cloud-dependent.** The Popur X5 has no local API. This plugin talks to
+> ⚠️ **Unofficial & cloud-dependent.** Popur boxes have no local API. This plugin talks to
 > Popur's cloud (`cloud.popur.com.cn`) using the same protocol the official app uses,
 > reverse-engineered from the
 > [Home Assistant Popur integration](https://github.com/gingerAUT1988/home-assistant-popur).
@@ -12,17 +13,20 @@ cat litter box into Apple HomeKit.
 
 ## What you get in HomeKit
 
-HomeKit has no "litter box" accessory type, so the device is mapped onto standard services:
+HomeKit has no "litter box" accessory type, so each device is exposed as several **separate
+tiles**:
 
-| HomeKit tile          | What it does |
-|-----------------------|--------------|
-| **Clean** (switch)    | Flip on to start a cleaning cycle; it auto-resets to off. |
-| **Night Mode** (switch) | Toggles manual / do-not-disturb mode. |
-| **Waste Bin** (filter maintenance) | Shows a "Change Filter" indication when the waste drawer is full — use it to trigger Home app notifications. |
-| Online status         | Reflected as a fault/unreachable state on the tiles when the box drops offline. |
+| HomeKit tile          | Service | What it does |
+|-----------------------|---------|--------------|
+| **Clean**             | Switch (momentary) | Flip on to start a cleaning cycle; it auto-resets to off. |
+| **Night Mode**        | Switch  | Toggles manual / do-not-disturb mode. |
+| **Waste Bin**         | Occupancy Sensor | "Occupancy detected" when the waste drawer is full — use it to trigger Home app notifications. |
+| **Cycles Today**      | Light Sensor | Today's cycle count surfaced as a lux reading (e.g. 3 cycles → "3 lux"), read-only. |
 
-Cycle counts are written to the Homebridge debug log but not surfaced as a HomeKit tile
-(there's no clean characteristic for it).
+Each tile also reflects the box going offline (the sensors show an unreachable/fault state).
+
+> The **Waste Bin** uses an Occupancy Sensor rather than a Filter Maintenance service because
+> Apple's Home app does not render standalone Filter Maintenance tiles.
 
 ## Install
 
@@ -30,7 +34,7 @@ Cycle counts are written to the Homebridge debug log but not surfaced as a HomeK
 npm install -g homebridge-popur
 ```
 
-Or via the Homebridge UI: search for **Popur X5**.
+Or via the Homebridge UI: search for **Popur**.
 
 ## Configuration
 
@@ -40,8 +44,8 @@ Add via the Homebridge UI, or in `config.json`:
 {
   "platforms": [
     {
-      "platform": "PopurX5",
-      "name": "Popur X5",
+      "platform": "Popur",
+      "name": "Popur",
       "email": "you@example.com",
       "password": "your-popur-app-password",
       "pollInterval": 60

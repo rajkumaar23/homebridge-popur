@@ -19,6 +19,8 @@ export interface PopurDevice {
   /** Device id used in status/command endpoints. */
   id: string;
   name: string;
+  /** Model code reported by the cloud (e.g. "LB02K"), if any. */
+  model: string;
   /** Raw device record from the cloud, in case more fields are needed later. */
   raw: Record<string, unknown>;
 }
@@ -122,7 +124,8 @@ export class PopurApi {
       }
       return list.map((d) => ({
         id: String(d.devid ?? d._id ?? d.did ?? d.deviceid ?? d.id ?? ''),
-        name: String(d.name ?? d.nickname ?? d.devicename ?? 'Popur X5'),
+        name: String(d.name ?? d.nickname ?? d.devicename ?? 'Popur'),
+        model: String(d.model ?? d.devicemodel ?? ''),
         raw: d,
       })).filter((d) => d.id !== '');
     } catch (err) {
