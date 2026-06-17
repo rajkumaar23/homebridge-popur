@@ -6,4 +6,4 @@ export const PLATFORM_NAME = 'PopurX5';
 /**
  * Must match the "name" field in package.json.
  */
-export const PLUGIN_NAME = 'homebridge-popur-x5';
+export const PLUGIN_NAME = 'homebridge-popur';

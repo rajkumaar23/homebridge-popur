@@ -1,4 +1,4 @@
-# homebridge-popur-x5
+# homebridge-popur
 
 A [Homebridge](https://homebridge.io) plugin that brings the **Popur X5** self-cleaning
 cat litter box into Apple HomeKit.
@@ -27,7 +27,7 @@ Cycle counts are written to the Homebridge debug log but not surfaced as a HomeK
 ## Install
 
 ```sh
-npm install -g homebridge-popur-x5
+npm install -g homebridge-popur
 ```
 
 Or via the Homebridge UI: search for **Popur X5**.

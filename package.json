@@ -1,6 +1,6 @@
 {
   "displayName": "Homebridge Popur X5",
-  "name": "homebridge-popur-x5",
+  "name": "homebridge-popur",
   "version": "0.1.0",
   "description": "Homebridge plugin for the Popur X5 self-cleaning cat litter box (via the Popur cloud).",
   "license": "MIT",
