@@ -14,12 +14,13 @@ export type PopurFeature = 'clean' | 'night' | 'bin' | 'cycles';
  * standalone accessories so they appear as separate tiles in the Home app:
  *   - clean  : Switch (momentary)  -> triggers a clean cycle, then auto-resets
  *   - night  : Switch (stateful)   -> toggles manual / do-not-disturb mode
- *   - bin    : OccupancySensor     -> "Detected" when the waste bin is full
+ *   - bin    : LeakSensor          -> "Leak Detected" (red alert) when the bin is full
  *   - cycles : LightSensor         -> today's cycle count surfaced as lux (read-only)
  * Online/offline is reflected via StatusActive + StatusFault on the sensor tiles.
  *
- * Note: the waste bin uses an OccupancySensor rather than FilterMaintenance because
- * Apple's Home app does not render a standalone FilterMaintenance service.
+ * Note: the waste bin uses a LeakSensor rather than FilterMaintenance because Apple's
+ * Home app does not render a standalone FilterMaintenance service; a leak sensor gives
+ * the most visible "needs attention" alert for a full bin.
  */
 export class PopurAccessory {
   private readonly service: Service;
@@ -58,10 +59,10 @@ export class PopurAccessory {
         break;
 
       case 'bin':
-        this.service = this.accessory.getService(Service.OccupancySensor)
-          || this.accessory.addService(Service.OccupancySensor, name);
-        this.service.getCharacteristic(Characteristic.OccupancyDetected)
-          .onGet(() => this.binOccupancy(this.poller.current));
+        this.service = this.accessory.getService(Service.LeakSensor)
+          || this.accessory.addService(Service.LeakSensor, name);
+        this.service.getCharacteristic(Characteristic.LeakDetected)
+          .onGet(() => this.binLeak(this.poller.current));
         break;
 
       case 'cycles':
@@ -73,15 +74,25 @@ export class PopurAccessory {
         break;
     }
 
+    // Drop any leftover services from earlier plugin versions (e.g. a cached bin
+    // accessory that still carries the old FilterMaintenance service). A stale
+    // service can stop the Home app from rendering the accessory.
+    for (const stale of [...this.accessory.services]) {
+      if (stale.UUID !== Service.AccessoryInformation.UUID && stale !== this.service) {
+        this.platform.log.debug(`Removing stale service "${stale.displayName}" from ${name}`);
+        this.accessory.removeService(stale);
+      }
+    }
+
     this.service.setCharacteristic(Characteristic.Name, name);
     this.poller.onUpdate((status) => this.update(status));
   }
 
-  private binOccupancy(status: PopurStatus): CharacteristicValue {
+  private binLeak(status: PopurStatus): CharacteristicValue {
     const { Characteristic } = this.platform;
     return status.binFull
-      ? Characteristic.OccupancyDetected.OCCUPANCY_DETECTED
-      : Characteristic.OccupancyDetected.OCCUPANCY_NOT_DETECTED;
+      ? Characteristic.LeakDetected.LEAK_DETECTED
+      : Characteristic.LeakDetected.LEAK_NOT_DETECTED;
   }
 
   /** Map today's cycle count to lux. CurrentAmbientLightLevel must be >= 0.0001. */
@@ -125,8 +136,8 @@ export class PopurAccessory {
         break;
       case 'bin':
         this.service.updateCharacteristic(
-          Characteristic.OccupancyDetected,
-          this.binOccupancy(status),
+          Characteristic.LeakDetected,
+          this.binLeak(status),
         );
         break;
       case 'cycles':

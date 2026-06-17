@@ -20,13 +20,15 @@ tiles**:
 |-----------------------|---------|--------------|
 | **Clean**             | Switch (momentary) | Flip on to start a cleaning cycle; it auto-resets to off. |
 | **Night Mode**        | Switch  | Toggles manual / do-not-disturb mode. |
-| **Waste Bin**         | Occupancy Sensor | "Occupancy detected" when the waste drawer is full — use it to trigger Home app notifications. |
+| **Waste Bin**         | Leak Sensor | "Leak Detected" (bold red alert) when the waste drawer is full — use it to trigger Home app notifications. |
 | **Cycles Today**      | Light Sensor | Today's cycle count surfaced as a lux reading (e.g. 3 cycles → "3 lux"), read-only. |
 
 Each tile also reflects the box going offline (the sensors show an unreachable/fault state).
 
-> The **Waste Bin** uses an Occupancy Sensor rather than a Filter Maintenance service because
-> Apple's Home app does not render standalone Filter Maintenance tiles.
+> HomeKit has no "litter box" or "bin full" accessory type, so these are pragmatic mappings.
+> The **Waste Bin** uses a Leak Sensor (rather than the semantically-nicer Filter Maintenance)
+> because Apple's Home app does not render standalone Filter Maintenance tiles — a leak sensor
+> gives the most visible "needs attention" alert.
 
 ## Install
 
