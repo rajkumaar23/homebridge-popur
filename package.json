@@ -1,0 +1,54 @@
+{
+  "displayName": "Homebridge Popur X5",
+  "name": "homebridge-popur-x5",
+  "version": "0.1.0",
+  "description": "Homebridge plugin for the Popur X5 self-cleaning cat litter box (via the Popur cloud).",
+  "license": "MIT",
+  "author": "rajkumaar23 <rajkumaar2304@icloud.com>",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rajkumaar23/homebridge-popur.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rajkumaar23/homebridge-popur/issues"
+  },
+  "homepage": "https://github.com/rajkumaar23/homebridge-popur#readme",
+  "engines": {
+    "homebridge": "^1.6.0 || ^2.0.0-beta.0",
+    "node": "^18.20.0 || ^20.9.0 || ^22.0.0 || ^24.0.0"
+  },
+  "files": [
+    "dist",
+    "config.schema.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "smoke": "ts-node scripts/smoke.ts",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "popur",
+    "popur-x5",
+    "litter-box",
+    "cat",
+    "homekit"
+  ],
+  "dependencies": {
+    "axios": "^1.7.0",
+    "mqtt": "^5.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "homebridge": "^1.8.0",
+    "rimraf": "^5.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}

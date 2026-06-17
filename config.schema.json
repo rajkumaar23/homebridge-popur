@@ -1,0 +1,39 @@
+{
+  "pluginAlias": "PopurX5",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Connects your Popur X5 litter box to HomeKit through the Popur cloud. Enter the same email and password you use in the Popur app.",
+  "footerDisplay": "This is an unofficial plugin that talks to Popur's cloud (cloud.popur.com.cn). It is not affiliated with Popur and may break if the cloud API changes.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Popur X5",
+        "required": true
+      },
+      "email": {
+        "title": "Popur Account Email",
+        "type": "string",
+        "format": "email",
+        "required": true
+      },
+      "password": {
+        "title": "Popur Account Password",
+        "type": "string",
+        "required": true,
+        "x-schema-form": {
+          "type": "password"
+        }
+      },
+      "pollInterval": {
+        "title": "Poll Interval (seconds)",
+        "type": "integer",
+        "default": 60,
+        "minimum": 15,
+        "description": "How often to refresh status from the Popur cloud."
+      }
+    }
+  }
+}
