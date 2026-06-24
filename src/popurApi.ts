@@ -184,11 +184,7 @@ export class PopurApi {
       });
       const data = resp.data?.data ?? {};
       return {
-        // The cloud reports `rubbish` as a fill level: 0 = ok, and a non-zero
-        // value means the waste bin needs emptying. The HA component this was
-        // ported from used `== 2`, but the X5 reports `1` when full, so treat
-        // any non-zero value as full.
-        binFull: Number(data.rubbish) >= 1,
+        binFull: data.rubbish === 2,
         cycles: Number(data.worknum ?? 0),
         totalCycles: Number(data.lastworknum ?? 0),
         manualMode: String(data.manualmode) === '1',
