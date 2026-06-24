@@ -162,6 +162,17 @@ export class PopurApi {
     return [];
   }
 
+  /** Debug helper: return the raw deviceinfo/info response body for a device. */
+  async getStatusRaw(deviceId: string): Promise<unknown> {
+    if (!(await this.ensureToken())) {
+      return null;
+    }
+    const resp = await this.http.get(`/uapi/deviceinfo/info/${deviceId}`, {
+      headers: this.authHeaders(),
+    });
+    return resp.data;
+  }
+
   /** Fetch and normalize the status of a single device. Returns null on failure. */
   async getStatus(deviceId: string): Promise<PopurStatus | null> {
     if (!(await this.ensureToken())) {
@@ -173,7 +184,11 @@ export class PopurApi {
       });
       const data = resp.data?.data ?? {};
       return {
-        binFull: data.rubbish === 2,
+        // The cloud reports `rubbish` as a fill level: 0 = ok, and a non-zero
+        // value means the waste bin needs emptying. The HA component this was
+        // ported from used `== 2`, but the X5 reports `1` when full, so treat
+        // any non-zero value as full.
+        binFull: Number(data.rubbish) >= 1,
         cycles: Number(data.worknum ?? 0),
         totalCycles: Number(data.lastworknum ?? 0),
         manualMode: String(data.manualmode) === '1',

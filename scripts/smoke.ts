@@ -51,6 +51,14 @@ async function main() {
   }
 
   const device = devices[0];
+
+  // Set DEBUG_RAW=1 to dump the raw deviceinfo/info body — useful for confirming
+  // exactly what `rubbish` (and friends) report when the bin is physically full.
+  if (process.env.DEBUG_RAW) {
+    const rawStatus = await api.getStatusRaw(device.id);
+    log.info('RAW deviceinfo:\n' + JSON.stringify(rawStatus, null, 2));
+  }
+
   const status = await api.getStatus(device.id);
   log.info(`Status of ${device.name}:`, status);
 
